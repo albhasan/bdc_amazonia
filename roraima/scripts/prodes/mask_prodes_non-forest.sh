@@ -1,7 +1,7 @@
 #!/bin/bash
 # Mask deforestation before 2019 from PRODES raster.
 
-echo "DEPRECATED: Use the PRODES raster"
+echo "DEPRECATED: Use the vectorize_prodes.sh"
 exit 1
 
 in_file="/home/alber.ipia/Documents/bdc_amazonia/roraima/data/raster/prodes/2019/PDigital2000_2019_AMZ_gtif.tif"
