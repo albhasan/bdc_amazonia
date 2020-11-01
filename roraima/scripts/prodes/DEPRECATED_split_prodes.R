@@ -1,6 +1,6 @@
 # Split a PRODES shapefile.
 
-stop("DEPRECATED: Use the PRODES raster.")
+stop("DEPRECATED: Use the vectorize_prodes.sh")
 
 library(dplyr)
 library(sf)
