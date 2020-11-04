@@ -6,7 +6,7 @@ library(sits)
 
 source("/home/alber.ipia/Documents/bdc_amazonia/roraima/scripts/util.R")
 
-points_file <- "./data/samples/points_tb.rds"
+points_file <- "./roraima/data/samples/points_tb.rds"
 stopifnot(file.exists(points_file))
 
 #---- Read data ----
@@ -56,6 +56,7 @@ stack_cube <- sits::sits_cube(type        = "BDC_TILE",
 
 shp_file <- tempfile(pattern = "samples_",
                      fileext = ".shp")
+
 samples_sf %>%
     sf::write_sf(dsn = shp_file)
 
@@ -99,4 +100,4 @@ for (i in 1:ncol(samples_tb2)) {
 
 samples_tb2 %>%
     is_sits_valid() %>%
-    saveRDS(file = "./data/samples/samples_ts.rds")
+    saveRDS(file = "./roraima/data/samples/samples_ts.rds")

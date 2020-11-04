@@ -1,29 +1,26 @@
-
-# TODO: Everything!!!!
+library(dplyr)
 
 #---- Configuration ----
 
 num_of_trees <- 1000
 my_model <- paste("rf", num_of_trees, sep = "-")
-# my_bands <- c("B01", "B02", "B03", "B04", "B05", "B06",  "B08", "B8A", "B07",
-#               "B11", "B12") # NOTE: Unable to read bands "EVI", "NDVI", "FMASK"
-my_bands <- c("B02", "B03", "B04", "B08", "B8A",  "B11", "B12")
-my_cube <- "S2_10_16D_STK"
-my_tiles <- "079082"
-my_version <- "v001"
+#my_cube <- "S2_10_16D_STK"
+#my_tiles <- "079082"
+#my_version <- "v001"
+
+train_tb <- readRDS("./roraima/data/samples/samples_train.rds")
 
 #---- Choose the best band combination using kfolds ----
 
-# NOTE: Do not run again. Seven bands produce the same classification as all_bands
-
 # Helper for running k-folds
 run_kfolds <- function(bands, samples_tb, n_samples){
-    lapply(1:100, function(i){
+    #lapply(1:100, function(i){
+    lapply(1:10, function(i){
         samples_tb %>%
             sits::sits_sample(n = n_samples) %>%
             sits::sits_select(bands) %>%
             sits::sits_kfold_validate(folds = 10,
-                             ml_method = sits::sits_rfor(num_trees = 1000)) %>%
+                  ml_method = sits::sits_rfor(num_trees = num_of_trees)) %>%
             sits::sits_conf_matrix() %>%
             return()
     })
@@ -44,7 +41,9 @@ get_accuracy <- function(x){
 
 experiments <- list(all_bands = c("B01", "B02", "B03", "B04", "B05", "B06",
                                   "B08", "B8A", "B07", "B11", "B12"),
-                    seven_bands = my_bands)
+                    seven_bands = c("B02", "B03", "B04", "B08", "B8A",  "B11",
+                                    "B12"),
+                    two_bands = c("B04", "B08"))
 
 kfold_ls <- lapply(experiments, run_kfolds, samples_tb = train_tb,
                    n_samples = sum(train_tb$label == "Deforestation"))
@@ -74,6 +73,3 @@ experiments_tb %>%
 # 2 seven_bands       0.947   0.00789       0.952   0.00780       0.952     0.952       0.947     0.947
 
 #---- Test different models -----
-
-
-

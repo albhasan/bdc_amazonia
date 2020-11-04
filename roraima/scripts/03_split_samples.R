@@ -5,7 +5,7 @@ library(dplyr)
 library(sf)
 library(sits)
 
-source("./scripts/util.R")
+source("./roraima/scripts/util.R")
 
 grid_size <- 1024
 
@@ -14,7 +14,7 @@ grid_size <- 1024
 
 #---- Get the samples ----
 
-samples_tb <- "./data/samples/samples_ts.rds" %>%
+samples_tb <- "./roraima/data/samples/samples_ts.rds" %>%
     readRDS() %>%
     is_sits_valid() %>%
     id_from_coords()
@@ -25,7 +25,8 @@ samples_sf <- samples_tb %>%
     sf::st_as_sf(coords = c("longitude", "latitude"),
                  crs = 4326)
 #set.seed(123) # all bands
-set.seed(234) # 7 bands
+#set.seed(234) # 7 bands
+set.seed(345)  # samples including the label "other".
 samples_grid <- samples_sf %>%
     sf::st_make_grid(n = rep(sqrt(grid_size), 2)) %>%
     sf::st_as_sf() %>%
@@ -69,7 +70,7 @@ train_tb <- samples_tb %>%
     ensurer::ensure_that(nrow(.) > 0, err_desc = "Missing training samples!") %>%
     (function(x){
         x %>%
-            saveRDS(file = "./data/samples/samples_train.rds")
+            saveRDS(file = "./roraima/data/samples/samples_train.rds")
         invisible(x)
     })
 test_tb <- samples_tb %>%
@@ -78,11 +79,11 @@ test_tb <- samples_tb %>%
     ensurer::ensure_that(nrow(.) > 0, err_desc = "Missing testing samples!") %>%
     (function(x){
         x %>%
-            saveRDS(file = "./data/samples/samples_test.rds")
+            saveRDS(file = "./roraima/data/samples/samples_test.rds")
         invisible(x)
     })
 samples_tb %>%
     dplyr::filter(role == "validation") %>%
     dplyr::select(-bin_id, -role) %>%
     ensurer::ensure_that(nrow(.) > 0, err_desc = "Missing validation samples!") %>%
-    saveRDS(file = "./data/samples/samples_validation.rds")
+    saveRDS(file = "./roraima/data/samples/samples_validation.rds")

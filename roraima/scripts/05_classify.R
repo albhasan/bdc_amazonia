@@ -15,7 +15,7 @@ my_bands <- c("B02", "B03", "B04", "B08", "B8A",  "B11", "B12")
 my_cube <- "S2_10_16D_STK"
 my_tiles <- "079082"
 
-my_version <- "v004_2"
+my_version <- "v005_2"
 #cube_dir <- "/http/s2/S2_10_16D_STK/v001/079082"              # Whole cube
 #cube_dir <- "/http/s2/mini/brick_1/S2_10_16D_STK/v001/079082" # Mini cube 1
 cube_dir <- "/http/s2/mini/brick_2/S2_10_16D_STK/v001/079082" # Mini cube 2
@@ -31,27 +31,32 @@ samples_tb <- train_tb %>%
     dplyr::bind_rows(test_tb) %>%
     sits::sits_select(my_bands)
 
-# NOTE: Unbalanced data set. Balance the samples!
-minimum_n <- samples_tb %>%
-    dplyr::pull(label) %>%
-    table() %>%
-    min()
+# NOTE: Is the dataset balanced?
+samples_tb %>%
+    dplyr::count(label)
 
-set.seed(666)
-samples_tb <- samples_tb %>%
-    dplyr::group_by(label) %>%
-    dplyr::sample_n(size = minimum_n) %>%
-    dplyr::ungroup()
+# minimum_n <- samples_tb %>%
+#     dplyr::pull(label) %>%
+#     table() %>%
+#     min()
+#
+# set.seed(666)
+# samples_tb <- samples_tb %>%
+#     dplyr::group_by(label) %>%
+#     dplyr::sample_n(size = minimum_n) %>%
+#     dplyr::ungroup()
+# rm(minimum_n)
+
 class(samples_tb) <- class(cerrado_2classes)
 samples_tb %>%
     is_sits_valid()
 
-rm(train_tb, test_tb, minimum_n)
+rm(train_tb, test_tb)
 
 #---- Build a classification model ---
 
 rfor_model <- sits::sits_train(samples_tb,
-                               ml_method = sits::sits_rfor(num_trees = num_of_trees))
+                         ml_method = sits::sits_rfor(num_trees = num_of_trees))
 
 stack_cube <- sits::sits_cube(type        = "RASTER",
                               name        = "roraima",
