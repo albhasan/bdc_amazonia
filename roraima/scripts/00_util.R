@@ -67,6 +67,18 @@ clean_ts <- function(sits_tb, report = FALSE){
 }
 
 
+#' Check if two geometries intersect.
+#'
+#' @param x A sf object of POINT geometry type.
+#' @param y A sf object of POLYGON geometry type.
+#' @return  A logical of the same length of x.
+f_intersect <- function(x, y){
+    sf::st_intersects(x, y, sparse = FALSE) %>%
+        apply(1, any) %>%
+        return()
+}
+
+
 #' Return the PRODES year of the given date
 #'
 #' @param x            A Date object.
@@ -133,4 +145,33 @@ is_sits_valid <- function(x){
         ensurer::ensure_that("sits" %in% class(.),
                              err_desc = "The tibble is not a sits tibble")
     invisible(x)
+}
+
+
+#' Remove points which are too close to one another.
+#'
+#' @param sf_obj    A sf object of POINT geometry type.
+#' @param threshold A length-one numeric. The minimum distance between points.
+#' @return          A sf object.
+remove_close_points <- function(sf_obj, threshold){
+    stopifnot(threshold > 0)
+    g_type <- sf_obj %>%
+        sf::st_geometry_type() %>%
+        unique() %>%
+        as.character() %>%
+        ensurer::ensure_that(. == "POINT",
+                             err_desc = "Points expected!")
+
+    invalid_points <- sf_obj %>%
+        sf::st_distance() %>%
+        units::set_units(NULL) %>%
+        magrittr::is_less_than(threshold) %>%
+        colSums() %>%
+        magrittr::equals(1) %>%
+        magrittr::not() %>%
+        (function(x){
+            which(x %in% TRUE)
+        })
+
+    return(sf_obj[-invalid_points])
 }

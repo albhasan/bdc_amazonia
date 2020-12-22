@@ -12,6 +12,8 @@ mapbiomas_file <- "./roraima/data/vector/mapbiomas_alerta/dashboard_alerts-shape
 prodes_file    <- "./roraima/data/vector/prodes/PDigital2000_2019_AMZ.shp"
 stopifnot(all(file.exists(mapbiomas_file, prodes_file)))
 
+source("./roraima/scripts/00_util.R")
+
 # Length of the diagonal of a pixel.
 pixel_diag_mts <- 10 * sqrt(2)
 
@@ -21,48 +23,6 @@ time_interval <- lubridate::interval(lubridate::ymd("2018-08-01"),
 
 # UTM zone of the Roraima cube.
 projected_crs <- 32620
-
-
-#---- Util ----
-
-#' Check if two geometries intersect.
-#'
-#' @param x A sf object of POINT geometry type.
-#' @param y A sf object of POLYGON geometry type.
-#' @return  A logical of the same length of x.
-f_intersect <- function(x, y){
-    sf::st_intersects(x, y, sparse = FALSE) %>%
-        apply(1, any) %>%
-        return()
-}
-
-#' Remove points which are too close to one another.
-#'
-#' @param sf_obj    A sf object of POINT geometry type.
-#' @param threshold A length-one numeric. The minimum distance between points.
-#' @return          A sf object.
-remove_close_points <- function(sf_obj, threshold){
-    stopifnot(threshold > 0)
-    g_type <- sf_obj %>%
-        sf::st_geometry_type() %>%
-        unique() %>%
-        as.character() %>%
-        ensurer::ensure_that(. == "POINT",
-                             err_desc = "Points expected!")
-
-    invalid_points <- sf_obj %>%
-        sf::st_distance() %>%
-        units::set_units(NULL) %>%
-        magrittr::is_less_than(threshold) %>%
-        colSums() %>%
-        magrittr::equals(1) %>%
-        magrittr::not() %>%
-        (function(x){
-            which(x %in% TRUE)
-        })
-
-    return(sf_obj[-invalid_points])
-}
 
 
 #---- Deforestation samples ----
@@ -166,12 +126,9 @@ forest_other_polygons <- prodes_polygons %>%
     # 0.25 Ha ~ 5x5 10mts pixels
     dplyr::filter(area_ha > 0.25)
 
-# TODO:
-# - Remove MAPBIOMAS deforestation 2019 polygons
-# NOTE: Alternatively, sample and discount samples inside
 set.seed(234)
 forest_other_samples <- forest_other_polygons %>%
-    dplyr::mutate(n_samples = case_when(label == "Forest" ~ 2,
+    dplyr::mutate(n_samples = case_when(label == "Forest" ~ 4,
                                         label == "Other"  ~ 1)) %>%
     sf::st_sample(size = .$n_samples) %>%
     remove_close_points(threshold = pixel_diag_mts) %>%
@@ -181,7 +138,6 @@ forest_other_samples <- forest_other_polygons %>%
                                                                    # NOTE: Positive buffer.
                                                                    dist = 2 * pixel_diag_mts))) %>%
     dplyr::filter(in_deforestation == FALSE) %>%
-    forest_other_samples %>%
     dplyr::select(-in_deforestation) %>%
     sf::st_join(forest_other_polygons) %>%
     sf::st_transform(crs = 4326) %>%
@@ -205,16 +161,6 @@ points_tb <- forest_other_samples %>%
                               is.na(.$end_date)),
                          err_desc = "Missing values found!")
 
-deforestation_n <- points_tb %>%
-    dplyr::filter(label == "Deforestation") %>%
-    nrow()
-
-set.seed(345)
-points_tb <- points_tb %>%
-    dplyr::group_by(label) %>%
-    dplyr::sample_n(deforestation_n) %>%
-    dplyr::ungroup()
-
 points_tb %>%
     count(label)
 
@@ -222,6 +168,9 @@ points_tb %>%
     sf::st_as_sf(coords = c("longitude", "latitude"),
                  crs = 4326) %>%
     sf::write_sf("./roraima/data/samples/points_tb.shp")
+
+points_tb %>%
+    readr::write_csv(file = "./roraima/data/samples/points_tb.csv")
 
 points_tb %>%
     saveRDS("./roraima/data/samples/points_tb.rds")

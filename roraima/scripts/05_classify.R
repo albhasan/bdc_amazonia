@@ -5,9 +5,7 @@ library(dplyr)
 library(sf)
 library(sits)
 
-setwd("/home/alber.ipia/Documents/bdc_amazonia/roraima")
-
-source("./scripts/util.R")
+source("./roraima/scripts/util.R")
 
 num_of_trees <- 1000
 my_model <- paste("rf", num_of_trees, sep = "-")
@@ -23,9 +21,9 @@ cube_dir <- "/http/s2/mini/brick_2/S2_10_16D_STK/v001/079082" # Mini cube 2
 
 #---- Get the samples ----
 
-train_tb <- "./data/samples/samples_train.rds" %>%
+train_tb <- "./roraima/data/samples/samples_train.rds" %>%
     readRDS()
-test_tb <- "./data/samples/samples_test.rds" %>%
+test_tb <- "./roraima/data/samples/samples_test.rds" %>%
     readRDS()
 samples_tb <- train_tb %>%
     dplyr::bind_rows(test_tb) %>%

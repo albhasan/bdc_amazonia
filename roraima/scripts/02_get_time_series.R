@@ -4,7 +4,7 @@ library(dplyr)
 library(sf)
 library(sits)
 
-source("/home/alber.ipia/Documents/bdc_amazonia/roraima/scripts/util.R")
+source("./roraima/scripts/00_util.R")
 
 points_file <- "./roraima/data/samples/points_tb.rds"
 stopifnot(file.exists(points_file))
@@ -100,4 +100,4 @@ for (i in 1:ncol(samples_tb2)) {
 
 samples_tb2 %>%
     is_sits_valid() %>%
-    saveRDS(file = "./roraima/data/samples/samples_ts.rds")
+    saveRDS(file = "./roraima/data/samples/raw_samples_ts.rds")

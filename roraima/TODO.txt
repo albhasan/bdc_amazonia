@@ -1,0 +1,37 @@
+NOTES:
+
+TODO:
+- Use adversarial learning to collect samples as Rolf did.
+
+
+--------------------------------------------------------------------------------
+NOTES ON CLASSIFICATION USING PRODES & MAPBIOMAS:
+--------------------------------------------------------------------------------
+
+The initial experiment collected samples using automatic random sampling of
+deforestation from MAPBIOMAS and the other classes from PRODES. The argument was
+that MAPBIOMAS consolidates deforestation poligons from several sources
+(including PRODES) are are precise. However, the results were bad. See the
+description below.
+
+Results seven bands and cloud interpolation using local sits configuration
+(v003). Deforestation poligons aren't regular, they look like clouds and there
+is a lot of confusion of deforestation of the classification year with
+deforestation from previous years.
+
+A visual inspection reveals spatial correlation of classification results with
+fire spots.
+
+It seems the samples are represetative of fire scars instead of deforestation.
+This would explain the confusion in deforestation since present-day burn scars
+are common in deforesation from former years. This would also explain the
+irregular shape of the deforestation since the fire seem to be more related to
+topography or wind than to human control.
+
+TODO:
+- DONE: Crop PRODES data.
+- DONE: Collect samples to cover the whole brick.
+- DONE: Crop Mapbiomas data.
+- DEPRECATED: Mask results using PRODES.
+- DEPRECATED: Asses the classification results.
+- DEPRECATED: Analize the samples.
