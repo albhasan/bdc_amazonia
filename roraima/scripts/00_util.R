@@ -66,6 +66,39 @@ clean_ts <- function(sits_tb, report = FALSE){
         return()
 }
 
+#' Compute the information entropy in nats.
+#'
+#' @param img_path A length-one character. Path to a sits probability file.
+#' @param out_file A length-one character. Path to the file to store the results.
+#' @return         out_file.
+compute_entropy <- function(img_path, out_file){
+    # 2021-01-06
+    n_bands <- img_path %>%
+        ensurer::ensure_that(file.exists(.)) %>%
+        gdalUtils::gdalinfo() %>%
+        stringr::str_extract(pattern = "Band [0-9]+") %>%
+        .[!is.na(.)] %>%
+        dplyr::last() %>%
+        stringr::str_extract(pattern = "[0-9]+") %>%
+        as.numeric() %>%
+        ensurer::ensure_that(is.numeric(.), . > 1,
+                             err_desc = "Invalid number of bands!")
+    exp_bands <- paste(sprintf("-%s %s --%s_band=%s", LETTERS[1:n_bands],
+                               img_path, LETTERS[1:n_bands], 1:n_bands),
+                       collapse = " ")
+    exp_gdal <- paste0( "'(",
+                        paste(
+                            sprintf("%s.astype(numpy.float64)/10000 * numpy.log(%s.astype(numpy.float64)/10000)",
+                                    LETTERS[1:n_bands],
+                                    LETTERS[1:n_bands]),
+                            collapse = " + "
+                        ),
+                        ") * -1'")
+    cmd <- sprintf("gdal_calc.py %s --outfile=%s --calc=%s --NoDataValue=-9999 --type='Float64' --creation-option='COMPRESS=LZW' --creation-option='BIGTIFF=YES'",
+                   exp_bands, out_file, exp_gdal)
+    res <- system(cmd)
+    invisible(out_file)
+}
 
 #' Check if two geometries intersect.
 #'
@@ -97,16 +130,20 @@ get_prodes_year <- function(x, start_month = 8){
     }
 }
 
-#' Add an ID column to the given tibble.
+#' Add an ID column to the given tibble. The column id name from the variables
+#' longitude and latitude.
 #'
 #' @param x     A tibble.
+#' @param col   An object. The name of the new column.
 #' @param n_dec A length-one integer. The number of decimals to use.
 #' @return      A tibble with the additional column id_coords.
-id_from_coords <- function(x, n_dec = 6){
+id_from_coords <- function(x, col, n_dec = 6){
     x %>%
+        ensurer::ensure_that(all(c("longitude", "latitude") %in% colnames(.)),
+                             err_desc = "Missing columns: longitude and latitude") %>%
         dplyr::mutate(x_str = as.character(round(longitude, digits = n_dec)),
                       y_str = as.character(round(latitude, digits = n_dec)),
-                      id_coords = stringr::str_c(x_str, y_str)) %>%
+                      {{col}} := stringr::str_c(x_str, y_str, sep = "_")) %>%
         dplyr::select(-x_str, -y_str) %>%
         return()
 }
@@ -174,4 +211,36 @@ remove_close_points <- function(sf_obj, threshold){
         })
 
     return(sf_obj[-invalid_points])
+}
+
+# Return a cube
+get_cube <- function(cube){
+    cube_path <- tibble::tribble(
+        ~name, ~dir_path,
+        "cube",   "/home/alber.ipia/Documents/bdc_amazonia/roraima/data/raster/S2_10_16D_STK/v001/079082",
+        "mini_1", "/home/alber.ipia/Documents/bdc_amazonia/roraima/data/raster/mini/brick_1/S2_10_16D_STK/v001/079082",
+        "mini_2", "/home/alber.ipia/Documents/bdc_amazonia/roraima/data/raster/mini/brick_2/S2_10_16D_STK/v001/079082",
+        "mini_3", "/home/alber.ipia/Documents/bdc_amazonia/roraima/data/raster/mini/brick_3/S2_10_16D_STK/v001/079082"
+    ) %>%
+        ensurer::ensure_that(all(dir.exists(.$dir_path)),
+                             err_desc = "Invalid cube directories!")
+
+    cube_dir <- cube_path %>%
+        dplyr::filter(name == cube) %>%
+        ensurer::ensure_that(nrow(.) == 1,
+                             err_desc = sprintf("Cube not found. Available options are %s",
+                                                paste(cube_path$name, collapse = ", "))) %>%
+                                 dplyr::pull(dir_path)
+
+    sits::sits_cube(
+        type = "STACK",
+        name = "S2_10_16D_STK_079082",
+        satellite = "SENTINEL-2",
+        sensor = "MSI",
+        data_dir = cube_dir,
+        delim = "_",
+        # S2_10_16D_STK_v001_079082_2019-07-28_2019-08-12_band4.tif
+        parse_info = c("mission", "sp_res", "tm_res", "type", "version", "tile", "date", "end_date", "band")
+    ) %>%
+        return()
 }
