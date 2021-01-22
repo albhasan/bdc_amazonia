@@ -1,4 +1,11 @@
-# Split the samples into train, test, and validation roles.
+# Apply SOM to samples.
+# Split samples into train, test, and validation roles.
+
+stop("DEPRECATED: I'm using adversarial learning instead.")
+
+TODO:
+    - Find another way to collect validaton samples
+
 
 library(magrittr)
 library(dplyr)
@@ -10,29 +17,27 @@ source("./roraima/scripts/00_util.R")
 
 #---- Configuration ----
 
-grid_size <- 1024
+#grid_size <- 1024
 
 
 #---- Util ----
 
 # SOM wrapper.
-run_som <- function(my_samples){
-    return(
-        sits::sits_som_map(my_samples,
-                           grid_xdim = 10,
-                           grid_ydim = 10,
-                           alpha = 1.0,
-                           rlen = 100,
-                           distance = "euclidean",
-                           iterations = 1)
-    )
-}
+# run_som <- function(my_samples){
+#     return(
+#         sits::sits_som_map(my_samples,
+#                            grid_xdim = 10,
+#                            grid_ydim = 10,
+#                            alpha = 1.0,
+#                            rlen = 100,
+#                            distance = "euclidean",
+#                            iterations = 1)
+#     )
+# }
 
 
 #---- Get the samples ----
 
-
-I cannot select a subset of bands to run the SOM. I need to use them all.
 
 raw_samples_tb <- "./roraima/data/samples/raw_samples_ts.rds" %>%
     readRDS() %>%

@@ -5,87 +5,77 @@ library(dplyr)
 library(sf)
 library(sits)
 
-source("./roraima/scripts/util.R")
+source("./roraima/scripts/00_util.R")
 
+my_cube <- "mini_3"
 num_of_trees <- 1000
 my_model <- paste("rf", num_of_trees, sep = "-")
 my_bands <- c("B02", "B03", "B04", "B08", "B8A",  "B11", "B12")
-my_cube <- "S2_10_16D_STK"
 my_tiles <- "079082"
+my_version <- "v010_2b"
 
-my_version <- "v005_2"
-#cube_dir <- "/http/s2/S2_10_16D_STK/v001/079082"              # Whole cube
-#cube_dir <- "/http/s2/mini/brick_1/S2_10_16D_STK/v001/079082" # Mini cube 1
-cube_dir <- "/http/s2/mini/brick_2/S2_10_16D_STK/v001/079082" # Mini cube 2
 
 
 #---- Get the samples ----
 
-train_tb <- "./roraima/data/samples/samples_train.rds" %>%
-    readRDS()
-test_tb <- "./roraima/data/samples/samples_test.rds" %>%
-    readRDS()
-samples_tb <- train_tb %>%
-    dplyr::bind_rows(test_tb) %>%
-    sits::sits_select(my_bands)
+# Add only smapl
+samples_tb <-
+    "./roraima/data/samples/samples_ts.rds" %>%
+    readRDS() %>%
+    sits::sits_select(my_bands) %>%
+    dplyr::filter(label != "unknown") %>%
+    magrittr::set_class(class(cerrado_2classes)) %>%
+    print(n = Inf)
+    dplyr::filter(label != label_pred)
 
 # NOTE: Is the dataset balanced?
 samples_tb %>%
     dplyr::count(label)
 
-# minimum_n <- samples_tb %>%
-#     dplyr::pull(label) %>%
-#     table() %>%
-#     min()
-#
-# set.seed(666)
-# samples_tb <- samples_tb %>%
-#     dplyr::group_by(label) %>%
-#     dplyr::sample_n(size = minimum_n) %>%
-#     dplyr::ungroup()
-# rm(minimum_n)
-
-class(samples_tb) <- class(cerrado_2classes)
 samples_tb %>%
     is_sits_valid()
 
-rm(train_tb, test_tb)
 
-#---- Build a classification model ---
+
+#---- Build a classification model ----
 
 rfor_model <- sits::sits_train(samples_tb,
                          ml_method = sits::sits_rfor(num_trees = num_of_trees))
 
-stack_cube <- sits::sits_cube(type        = "RASTER",
-                              name        = "roraima",
-                              satellite   = "SENTINEL-2",
-                              sensor      = "MSI",
-                              resolution  = "10m",
-                              data_dir    = cube_dir,
-                              parse_info  = c("x1", "x2", "x3", "x4", "x5", "x6",
-                                              "date", "x8", "band"),
-                              delim       = "_")
+
+
+#---- Classify the cube ----
+
+data_cube <- get_cube(my_cube)
 
 # Prepare a directory to store results.
-dest_dir <- file.path(getwd(), "results",
+dest_dir <- file.path(getwd(), "roraima", "results",
                       my_model,
                       paste(sort(my_bands), collapse = "-"),
                       my_version)
 dir.create(dest_dir, recursive = TRUE)
 
-# Classify the cube.
 print("Classification start time: ")
 (start_time <- Sys.time())
-s2_probs <- sits::sits_classify(stack_cube,
+s2_probs <- sits::sits_classify(data_cube,
                                 ml_model = rfor_model,
                                 memsize = 2,
                                 multicores = 1,
                                 output_dir = dest_dir)
+label_tb <- sits::sits_labels(s2_probs) %>%
+    tibble::as_tibble() %>%
+    dplyr::rename(label = "value") %>%
+    dplyr::mutate(id = 1:nrow(.)) %>%
+    dplyr::select(id, label)
+label_tb %>%
+    write.csv(file.path(dest_dir, "sits_labels.csv"))
+
 end_time <- Sys.time()
 print(paste("Classification start time: ", start_time))
 print(paste("Classification end time: ", end_time))
 print("Classification duration: ")
 (end_time - start_time)
+
 
 
 # ALL BANDS
@@ -98,10 +88,15 @@ print("Classification duration: ")
 # [1] "Classification duration: "
 # Time difference of 1.816435 days
 
+
+
+#---- Post processing ----
+
 print("Bayesian start time: ")
 (start_time <- Sys.time())
-s2_label <- sits::sits_label_classification(s2_probs,
-                                            smoothing = "bayesian",
+s2_bayes <- sits::sits_smooth_bayes(s2_probs,
+                                    output_dir = dest_dir)
+s2_label <- sits::sits_label_classification(s2_bayes,
                                             output_dir = dest_dir)
 print(paste("Bayesian start time: ", start_time))
 print(paste("Bayesian end time: ", end_time))
@@ -110,3 +105,45 @@ print("Bayesian duration: ")
 
 print("Classification finished. The resutls are stored at:")
 print(dest_dir)
+
+# Compute the entropy
+prob_file <- paste0(file.path(dest_dir, s2_probs$bands[[1]]), "_v1.tif")
+entropy_file <- paste0(file.path(dest_dir, s2_probs$bands[[1]]), "_entropy_v1.tif")
+compute_entropy(prob_file, entropy_file)
+
+
+#---- Choose new samples for the oracle ----
+
+class_file <- s2_label$file_info[[1]]$path
+
+oracle_samples <- class_file %>%
+    raster::raster() %>%
+    raster::sampleStratified(size = 400, xy = TRUE, sp = TRUE) %>%
+    (function(y) {
+        return(raster::extract(x = raster::raster(entropy_file),
+                               y = y, sp = TRUE))
+    }) %>%
+    sf::st_as_sf() %>%
+    dplyr::rename_with(.fn = function(x){return(c("cell", "x", "y",
+                                                  "label_pred", "entropy",
+                                                  "geometry"))})
+oracle_samples <- oracle_samples %>%
+    dplyr::group_by(label_pred) %>%
+    dplyr::arrange(entropy,
+                   .by_group = TRUE) %>%
+    dplyr::slice_tail(prop = 0.10) %>%
+    dplyr::slice_head(prop = 0.5) %>%
+    dplyr::sample_n(5) %>%
+    dplyr::ungroup() %>%
+    dplyr::select(-cell, -x, -y) %>%
+    sf::st_transform(4326) %>%
+    dplyr::left_join(y = label_tb,
+                     by = c("label_pred" = "id")) %>%
+    dplyr::select(-label_pred) %>%
+    dplyr::rename(label_pred = label)
+oracle_samples %>%
+    dplyr::mutate(label = NA_character_,
+                  iteration = NA_integer_) %>%
+    sf::write_sf("./roraima/data/samples/samples_for_oracle.shp")
+
+

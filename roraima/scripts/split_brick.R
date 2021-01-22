@@ -32,7 +32,6 @@ crop_images <- function(in_file, out_file, xmin, xmax, ymin, ymax){
 
 
 
-
 #---- Script -----
 
 files_vec <- brick_dir %>%
@@ -92,12 +91,6 @@ mini_images <- images_tb %>%
                                                   xmax = xmax,
                                                   ymin = ymin,
                                                   ymax = ymax))
-
-
-
-
-
-
 
 xmin <-  4258000
 ymin <- 11536300

@@ -4,80 +4,75 @@ library(dplyr)
 library(sf)
 library(sits)
 
+
+#---- Set up ----
+
+my_cube <- "mini_3"
+samples_dir <- "./roraima/data/samples"
+
+stopifnot(dir.exists(samples_dir))
+
+
+#---- Util ----
+
+# Checks the of the sample shapefiles.
+format_sf <- function(x){
+    expected_vars <- c("longitude", "latitude", "start_date",
+                       "end_date", "label", "iteration", "label_pred",
+                       "entropy", "id_coord")
+    res <- x %>%
+        dplyr::bind_cols(magrittr::set_colnames(tibble::as_tibble(sf::st_coordinates(.)),
+                                                c("longitude", "latitude"))) %>%
+        dplyr::mutate(start_date = "2018-08-01",
+                      end_date   = "2019-07-31") %>%
+        id_from_coords(col = id_coord)
+    missing_vars <- setdiff(expected_vars, colnames(res))
+    for(i in missing_vars){
+        res[i] <- NA
+    }
+    return(res[expected_vars])
+}
+
+
+
+#---- Script ----
+
 source("./roraima/scripts/00_util.R")
 
-points_file <- "./roraima/data/samples/points_tb.rds"
-stopifnot(file.exists(points_file))
+# Get a sits cube.
+data_cube <- get_cube(my_cube)
 
-#---- Read data ----
 
-points_tb <- points_file %>%
-    readRDS()
+samples_tb <- samples_dir %>%
+    list.files(pattern = "samples_v[[:digit:]]+[.]shp",
+               full.names = TRUE) %>%
+    tibble::as_tibble() %>%
+    dplyr::rename("file_path" = "value") %>%
+    dplyr::mutate(sf = purrr::map(file_path, sf::read_sf)) %>%
+    dplyr::mutate(sf = purrr::map(sf, format_sf))
 
-#----- Pre-process samples ----
+samples_sf <- do.call(rbind, samples_tb$sf)
 
-# Build an sf object with the sample points.
-# Remove duplicates using coordintes as ID.
-samples_sf <- points_tb %>%
-     id_from_coords() %>%
-     (function(x){
-         id_mean <- mean(table(x$id_coords))
-         if(id_mean != 1)
-             warning("Duplicated points found! Removing duplicates....")
-         return(x)
-     }) %>%
-     dplyr::distinct(id_coords,label,
-                     .keep_all = TRUE) %>%
-     ensurer::ensure_that(mean(table(.$id_coords)) == 1,
-                          err_desc = "Found duplicated points with different \
-                          labels!") %>%
-     dplyr::select(-id_coords) %>%
-     sf::st_as_sf(coords = c("longitude", "latitude"),
-                  crs = 4326)
-
-# Build a sits cube
-stack_cube <- sits::sits_cube(type        = "BDC_TILE",
-                              name        = "roraima",
-                              satellite   = "SENTINEL-2",
-                              sensor      = "MSI",
-                              cube        = "S2_10_16D_STK",
-                              tiles       = "079082",
-                              version     = "v001",
-                              data_access = "local",
-                              bands       = c("B01", "B02", "B03", "B04", "B05",
-                                              "B06",  "B08", "B8A", "B07",
-                                              "B11", "B12",
-                                              #"EVI", "NDVI",
-                                              "FMASK"
-                              ),
-                              .cloud_band = TRUE,
-                              start_date  = as.Date("2018-08-01"),
-                              end_date    = as.Date("2019-07-31"))
-
-shp_file <- tempfile(pattern = "samples_",
-                     fileext = ".shp")
-
+samples_file <- tempfile(pattern = "samples_", fileext = ".shp")
 samples_sf %>%
-    sf::write_sf(dsn = shp_file)
+    sf::write_sf(samples_file)
 
-#---- Get the samples' time series
-samples_ts <- sits::sits_get_data(cube = stack_cube,
-                                  file = shp_file)
+label_tb <- samples_sf %>%
+    sf::st_set_geometry(NULL) %>%
+    tibble::as_tibble() %>%
+    dplyr::select(id_coord, label, label_pred, iteration)
 
-#---- Save to file ----
+# Get the samples' time series
+samples_ts <- sits::sits_get_data(cube = data_cube,
+                                  file = samples_file) %>%
+    id_from_coords(col = id_coord) %>%
+    dplyr::select(-label) %>%
+    dplyr::left_join(label_tb, by = "id_coord") %>%
+    dplyr::select(longitude, latitude, start_date, end_date,
+                  label, label_pred, cube, time_series, iteration)
 
-samples_tb <- samples_sf %>%
-    add_coords() %>%
-    sf::st_drop_geometry() %>%
-    id_from_coords() %>%
-    dplyr::select(id_coords, label) %>%
-    dplyr::rename(expert_label = label)
-
+# Save to file
 samples_tb2 <- samples_ts %>%
-    id_from_coords() %>%
-    dplyr::left_join(samples_tb, by = "id_coords") %>%
-    dplyr::mutate(label = expert_label) %>%
-    dplyr::select(-expert_label, -id_coords) %>%
     (function(x){
         x %>%
             clean_ts(report = TRUE) %>%
@@ -100,4 +95,4 @@ for (i in 1:ncol(samples_tb2)) {
 
 samples_tb2 %>%
     is_sits_valid() %>%
-    saveRDS(file = "./roraima/data/samples/raw_samples_ts.rds")
+    saveRDS(file = "./roraima/data/samples/samples_ts.rds")

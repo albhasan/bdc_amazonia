@@ -1,5 +1,9 @@
 # Exploratory data analysis.
 
+stop("DEPRECATED: I'm using adversarial learning!")
+
+
+
 library(dplyr)
 library(ggplot2)
 library(sits)
