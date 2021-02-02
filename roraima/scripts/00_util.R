@@ -12,6 +12,71 @@ add_coords <- function(point_sf){
         return()
 }
 
+
+#' Build a list of start and end pixels
+#'
+#' @param r_obj    A raster object.
+#' @param n_row    An integer. The number of rows in the grid.
+#' @param n_col    An integer. The number of columns in the grid.
+#' @param v_size   An integer. The vertical size of a cell in the grid.
+#' @param h_size   An integer. The horizontal size of a cell in the grid.
+#' @return         A dataframe of 2 column-lists.
+build_grid <- function(n_row, n_col, v_size, h_size) {
+
+    breaks_v <- unique(c(seq(1, n_row, by = v_size), n_row + 1))
+    v_start <- breaks_v[seq_len(length(breaks_v) - 1)]
+    v_end <- breaks_v[-1] - 1
+
+    breaks_h <- unique(c(seq(1, n_col, by = h_size), n_col + 1))
+    h_start <- breaks_h[seq_len(length(breaks_h) - 1)]
+    h_end <- breaks_h[-1] - 1
+
+    v_interval <- mapply(list, r1 = v_start, r2 = v_end, SIMPLIFY = FALSE)
+    h_interval <- mapply(list, c1 = h_start, c2 = h_end, SIMPLIFY = FALSE)
+
+    return(expand.grid(v = v_interval, h = h_interval))
+}
+
+
+#' Build a tesselation of subtiles of a raster using the given grid.
+#'
+#' @param grid       A grid created using the function build_grid.
+#' @param image_path Path to a raster.
+#' @param out_dir    A path.
+#' @param out_file   A path.
+#' @return           Paths to VRT files.
+build_vrt <- function(grid, image_path, out_dir, out_file){
+    r_obj <- raster::raster(image_path)
+    stopifnot(dir.exists(out_dir))
+    res <- lapply(seq_len(nrow(grid)), function(i){
+        my_extent <- raster::extent(r_obj,
+                                    c1 = grid$h[[i]]$c1,
+                                    c2 = grid$h[[i]]$c2,
+                                    r1 = grid$v[[i]]$r1,
+                                    r2 = grid$v[[i]]$r2)
+        out_dir <- paste0(out_dir, "/",
+                          paste(grid$h[[i]]$c1,
+                                grid$v[[i]]$r1,
+                                sep = "_"))
+        if (!dir.exists(out_dir))
+            dir.create(out_dir)
+        stopifnot(dir.exists(out_dir))
+
+        file_name <- paste0(out_dir, "/", out_file)
+
+        gdalUtils::gdalbuildvrt(
+            gdalfile = raster::filename(r_obj),
+            output.vrt = file_name,
+            te = c(attr(my_extent, "xmin"),
+                   attr(my_extent, "ymin"),
+                   attr(my_extent, "xmax"),
+                   attr(my_extent, "ymax")),
+            tr = c(raster::xres(r_obj), raster::xres(r_obj)))
+        return(file_name)
+    })
+    return(unlist(res))
+}
+
 #' Remove invalid samples of time series.
 #'
 #' @param  sits_tb A sits_tibble.
@@ -66,6 +131,7 @@ clean_ts <- function(sits_tb, report = FALSE){
         return()
 }
 
+
 #' Compute the information entropy in nats.
 #'
 #' @param img_path A length-one character. Path to a sits probability file.
@@ -100,51 +166,33 @@ compute_entropy <- function(img_path, out_file){
     invisible(out_file)
 }
 
-#' Check if two geometries intersect.
-#'
-#' @param x A sf object of POINT geometry type.
-#' @param y A sf object of POLYGON geometry type.
-#' @return  A logical of the same length of x.
-f_intersect <- function(x, y){
-    sf::st_intersects(x, y, sparse = FALSE) %>%
-        apply(1, any) %>%
-        return()
-}
 
+# Return a cube
+get_cube <- function(cube){
+    cube_path <- tibble::tribble(
+        ~name, ~dir_path,
+            "cube",   "/home/alber.ipia/Documents/bdc_amazonia/roraima/data/raster/S2_10_16D_STK/v001/079082",
+    ) %>%
+        ensurer::ensure_that(all(dir.exists(.$dir_path)),
+                             err_desc = "Invalid cube directories!")
 
-#' Return the PRODES year of the given date
-#'
-#' @param x            A Date object.
-#' @pararm start_month A length-one integer. The first month of the PRODES year.
-#' @return             An integer, the PRODES year.
-get_prodes_year <- function(x, start_month = 8){
-    if(!lubridate::is.Date(x))
-        return(NA)
-    if(length(x) == 1){
-        m <- lubridate::month(x)
-        if(m < start_month)
-            return(as.integer(lubridate::year(x)))
-        return(as.integer(lubridate::year(x) + 1))
-    }else if(length(x) > 1){
-        vapply(x, get_prodes_year, integer(1))
-    }
-}
+    cube_dir <- cube_path %>%
+        dplyr::filter(name == cube) %>%
+        ensurer::ensure_that(nrow(.) == 1,
+                             err_desc = sprintf("Cube not found. Available options are %s",
+                                                paste(cube_path$name, collapse = ", "))) %>%
+        dplyr::pull(dir_path)
 
-#' Add an ID column to the given tibble. The column id name from the variables
-#' longitude and latitude.
-#'
-#' @param x     A tibble.
-#' @param col   An object. The name of the new column.
-#' @param n_dec A length-one integer. The number of decimals to use.
-#' @return      A tibble with the additional column id_coords.
-id_from_coords <- function(x, col, n_dec = 6){
-    x %>%
-        ensurer::ensure_that(all(c("longitude", "latitude") %in% colnames(.)),
-                             err_desc = "Missing columns: longitude and latitude") %>%
-        dplyr::mutate(x_str = as.character(round(longitude, digits = n_dec)),
-                      y_str = as.character(round(latitude, digits = n_dec)),
-                      {{col}} := stringr::str_c(x_str, y_str, sep = "_")) %>%
-        dplyr::select(-x_str, -y_str) %>%
+    sits::sits_cube(type = "STACK",
+                    name = "S2_10_16D_STK_079082",
+                    satellite = "SENTINEL-2",
+                    sensor = "MSI",
+                    data_dir = cube_dir,
+                    delim = "_",
+                    parse_info = c("mission", "sp_resolution",
+                                   "time_resolution", "type",
+                                   "version", "tile", "date",
+                                   "end_date", "band")) %>%
         return()
 }
 
@@ -182,65 +230,4 @@ is_sits_valid <- function(x){
         ensurer::ensure_that("sits" %in% class(.),
                              err_desc = "The tibble is not a sits tibble")
     invisible(x)
-}
-
-
-#' Remove points which are too close to one another.
-#'
-#' @param sf_obj    A sf object of POINT geometry type.
-#' @param threshold A length-one numeric. The minimum distance between points.
-#' @return          A sf object.
-remove_close_points <- function(sf_obj, threshold){
-    stopifnot(threshold > 0)
-    g_type <- sf_obj %>%
-        sf::st_geometry_type() %>%
-        unique() %>%
-        as.character() %>%
-        ensurer::ensure_that(. == "POINT",
-                             err_desc = "Points expected!")
-
-    invalid_points <- sf_obj %>%
-        sf::st_distance() %>%
-        units::set_units(NULL) %>%
-        magrittr::is_less_than(threshold) %>%
-        colSums() %>%
-        magrittr::equals(1) %>%
-        magrittr::not() %>%
-        (function(x){
-            which(x %in% TRUE)
-        })
-
-    return(sf_obj[-invalid_points])
-}
-
-# Return a cube
-get_cube <- function(cube){
-    cube_path <- tibble::tribble(
-        ~name, ~dir_path,
-        "cube",   "/home/alber.ipia/Documents/bdc_amazonia/roraima/data/raster/S2_10_16D_STK/v001/079082",
-        "mini_1", "/home/alber.ipia/Documents/bdc_amazonia/roraima/data/raster/mini/brick_1/S2_10_16D_STK/v001/079082",
-        "mini_2", "/home/alber.ipia/Documents/bdc_amazonia/roraima/data/raster/mini/brick_2/S2_10_16D_STK/v001/079082",
-        "mini_3", "/home/alber.ipia/Documents/bdc_amazonia/roraima/data/raster/mini/brick_3/S2_10_16D_STK/v001/079082"
-    ) %>%
-        ensurer::ensure_that(all(dir.exists(.$dir_path)),
-                             err_desc = "Invalid cube directories!")
-
-    cube_dir <- cube_path %>%
-        dplyr::filter(name == cube) %>%
-        ensurer::ensure_that(nrow(.) == 1,
-                             err_desc = sprintf("Cube not found. Available options are %s",
-                                                paste(cube_path$name, collapse = ", "))) %>%
-                                 dplyr::pull(dir_path)
-
-    sits::sits_cube(
-        type = "STACK",
-        name = "S2_10_16D_STK_079082",
-        satellite = "SENTINEL-2",
-        sensor = "MSI",
-        data_dir = cube_dir,
-        delim = "_",
-        # S2_10_16D_STK_v001_079082_2019-07-28_2019-08-12_band4.tif
-        parse_info = c("mission", "sp_res", "tm_res", "type", "version", "tile", "date", "end_date", "band")
-    ) %>%
-        return()
 }

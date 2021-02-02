@@ -1,3 +1,4 @@
+stop("Adapt from Rondonia to Raoraima")
 # Split brick into mini brick for testing models.
 library(dply)
 library(lubridate)

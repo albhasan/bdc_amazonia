@@ -2,17 +2,26 @@ NOTES:
 
 TODO:
 - Use adversarial learning to collect samples as Rolf did.
+- Adapt scripts to the current cube. (exept 01_produce_samples)
 
+DONE:
+- DONE: update the list of BDC files to "2018-07-28" "2019-07-28"
+- DONE: Download the cubes.
+- DONE: Crop PRODES data.
+- DONE: Collect samples to cover the whole brick.
+- DONE: Crop Mapbiomas data.
+- DEPRECATED: Mask results using PRODES.
+- DEPRECATED: Asses the classification results.
+- DEPRECATED: Analize the samples.
 
 --------------------------------------------------------------------------------
-NOTES ON CLASSIFICATION USING PRODES & MAPBIOMAS:
+NOTES ON CLASSIFICATION USING SAMPLES FROM PRODES & MAPBIOMAS:
 --------------------------------------------------------------------------------
 
 The initial experiment collected samples using automatic random sampling of
 deforestation from MAPBIOMAS and the other classes from PRODES. The argument was
 that MAPBIOMAS consolidates deforestation poligons from several sources
-(including PRODES) are are precise. However, the results were bad. See the
-description below.
+(including PRODES) are are precise. However, the results were bad.
 
 Results seven bands and cloud interpolation using local sits configuration
 (v003). Deforestation poligons aren't regular, they look like clouds and there
@@ -27,11 +36,3 @@ This would explain the confusion in deforestation since present-day burn scars
 are common in deforesation from former years. This would also explain the
 irregular shape of the deforestation since the fire seem to be more related to
 topography or wind than to human control.
-
-TODO:
-- DONE: Crop PRODES data.
-- DONE: Collect samples to cover the whole brick.
-- DONE: Crop Mapbiomas data.
-- DEPRECATED: Mask results using PRODES.
-- DEPRECATED: Asses the classification results.
-- DEPRECATED: Analize the samples.

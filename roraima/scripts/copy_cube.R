@@ -1,3 +1,4 @@
+stop("Adapt from Rondonia to Raoraima")
 # Copy a BDC data cube to a local disc.
 
 library(dplyr)

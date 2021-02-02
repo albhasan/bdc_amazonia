@@ -1,18 +1,14 @@
+stop("Adapt from Rondonia to Raoraima")
 library(dplyr)
 library(stringr)
 
-source("./roraima/scripts/00_util.R")
+source("./scripts/00_util.R")
 
-prob_files_tb <-
-    "/home/alber.ipia/Documents/bdc_amazonia/roraima/results" %>%
+prob_files_tb <- "/home/alber.ipia/Documents/sits_classify_S2_10_16D_STK_077095/results" %>%
     list.files(pattern = "[.]tif$", full.names = TRUE, recursive = TRUE) %>%
     tibble::as_tibble() %>%
     dplyr::rename(file_path = value) %>%
     dplyr::mutate(file_name = tools::file_path_sans_ext(basename(file_path))) %>%
-    dplyr::filter(stringr::str_detect(file_name,
-                                      pattern = "S2_10_16D_STK_[0-9]{6}_probs_[0-9]{4}")) %>%
-    dplyr::filter(!stringr::str_detect(file_name,
-                                       pattern = "(bayes|entropy)")) %>%
     tidyr::separate(file_name,
                     into = c("mission", "sp_res", "tm_res", "cube", "tile",
                              "type", "syear", "smonth", "eyear", "emonth", "v")) %>%
@@ -21,3 +17,6 @@ prob_files_tb <-
                                                   pattern = "_v1.tif",
                                                   replacement = "_entropy_v1.tif")) %>%
     dplyr::mutate(res = purrr::map2_chr(file_path, out_file, compute_entropy))
+
+
+
