@@ -1,12 +1,14 @@
 .libPaths("/home/alber.ipia/R/x86_64-pc-linux-gnu-library/4.0")
-
-TODO: Now use the resutls of the classification itself.
+Sys.setenv(SITS_USER_CONFIG_FILE = "/home/alber.ipia/Documents/bdc_amazonia/roraima/config.yml")
 
 library(sits)
 library(dplyr)
 library(snow)
 
+
+setwd("/home/alber.ipia/Documents/bdc_amazonia")
 source("./roraima/scripts/00_util.R")
+
 
 
 #----- helper function ------
@@ -103,8 +105,14 @@ merge_out_dir <- paste0(project_dir, "/results/", classification_name)
 # NOTE: These variables must match the number of tiles for classification.
 split_dirs     <- paste0(project_dir,
                          c("/data/raster/S2_10_16D_STK/v001/079082_split"))
+
+# split_out_dirs <- paste0(project_dir, "/results/", classification_name,
+#                          c("/079082_split"))
+# NOTE: Use this for Active Learning!
 split_out_dirs <- paste0(project_dir, "/results/", classification_name,
-                         c("/079082_split"))
+                         c("/079082_split_al"))
+
+
 tile_names     <- "S2_10_16D_STK_079082"
 
 stopifnot(length(split_dirs) == length(split_out_dirs))
@@ -116,7 +124,11 @@ stopifnot(length(split_dirs) == length(tile_names))
 split_dir     <- split_dirs[[1]]
 split_out_dir <- split_out_dirs[[1]]
 cube_name     <- tile_names[[1]]
-model_file    <- "/home/alber.ipia/Documents/bdc_amazonia/roraima/results/active_learning/ml_model.rds"
+
+
+#model_file    <- "/home/alber.ipia/Documents/bdc_amazonia/roraima/results/active_learning/ml_model.rds"
+# NOTE: Use this for active learning!!!
+model_file    <- "/home/alber.ipia/Documents/bdc_amazonia/roraima/results/active_learning/ml_model_active_learning.rds"
 
 stopifnot(dir.exists(merge_out_dir))
 if (!dir.exists(split_dir))
@@ -126,6 +138,7 @@ if (!dir.exists(split_out_dir))
 stopifnot(dir.exists(split_dir))
 stopifnot(dir.exists(split_out_dir))
 stopifnot(file.exists(model_file))
+
 
 
 #---- run level classification ----
@@ -150,14 +163,12 @@ vrt_dirs <- list.dirs(split_dir,
                       full.names = TRUE,
                       recursive = FALSE)
 
-my_cluster <- snow::makeSOCKcluster(20)
+my_cluster <- snow::makeSOCKcluster(10,
+                                    outfile = "snow_cluster.log")
+#on.exit(snow::stopCluster(my_cluster))
 snow::clusterEvalQ(my_cluster,
                    .libPaths("/home/alber.ipia/R/x86_64-pc-linux-gnu-library/4.0"))
-#-------------------------------------------------------------------------------
-# NOTE: Sometimes, this code throws an error. Just run it again!!!
-# Error in unserialize(socklist[[n]]) : error reading from connection
-#-------------------------------------------------------------------------------
-time_start_end <- snow::clusterApplyLB(cl = my_cluster,
+ime_start_end <- snow::clusterApplyLB(cl = my_cluster,
                                        x = vrt_dirs,
                                        fun = classify_subtile,
                                        out_dir = split_out_dir,
@@ -181,48 +192,40 @@ prob_merged <- list.files(split_out_dir,
                           full.names = TRUE)[[1]] %>%
     readRDS()
 
-merged_r <- suppressWarnings(raster::brick(merged_tb$merged))
+# merged_r <- suppressWarnings(raster::brick(merged_tb$merged))
 
-prob_merged$cube <- cube_name
-prob_merged$file_info[[1]]$path <- merged_tb$merged
-prob_merged$file_info[[1]]$date <- merged_tb$date
-prob_merged$file_info[[1]]$band <- merged_tb$band
-prob_merged$nrows <- raster::nrow(merged_r)
-prob_merged$ncols <- raster::ncol(merged_r)
-prob_merged$xmin  <- raster::xmin(merged_r)
-prob_merged$ymin  <- raster::ymin(merged_r)
-prob_merged$xmax  <- raster::xmax(merged_r)
-prob_merged$ymax  <- raster::ymax(merged_r)
-
-# prob_bayes <- sits::sits_smooth(type = "bayes",
-#                                 cube = prob_merged)
-
-class_cube <- sits::sits_label_classification(cube = prob_merged,
-                                              output_dir = merge_out_dir)
-
-sprintf(paste0("split_dir     : %s \n",
-               "split_out_dir : %s \n",
-               "my_bands      : %s \n",
-               "cube_name     : %s \n",
-               "satellite     : %s \n",
-               "sensor        : %s \n",
-               "model_file    : %s \n",
-               "labels        : %s"),
-        split_dir,
-        split_out_dir,
-        paste(my_bands, collapse = ", "),
-        cube_name,
-        satellite,
-        sensor,
-        model_file,
-        paste(sort(unique(environment(ml_model)$data$label)),
-              collapse = ", ")) %>%
-    cat(file = paste0(merge_out_dir, "/metadata.txt"))
-
-# NOTE: Compress resulting images
-# NOTE: No size reduction after compression!
-#cd /home/alber.ipia/Documents/bdc_amazonia/roraima/results/active_learning
-#gdalwarp -co 'COMPRESS=LZW' -co 'BIGTIFF=YES' S2_10_16D_STK_079082_1_1_probs_class_2018_7_2019_7_v1.tif S2_10_16D_STK_079082_1_1_probs_class_2018_7_2019_7_v1_compress.tif
-#gdalwarp -co 'COMPRESS=LZW' -co 'BIGTIFF=YES' S2_10_16D_STK_079082_probs_2018_7.tif S2_10_16D_STK_079082_probs_2018_7_compress.tif
-
-
+# prob_merged$cube <- cube_name
+# prob_merged$file_info[[1]]$path <- merged_tb$merged
+# prob_merged$file_info[[1]]$date <- merged_tb$date
+# prob_merged$file_info[[1]]$band <- merged_tb$band
+# prob_merged$nrows <- raster::nrow(merged_r)
+# prob_merged$ncols <- raster::ncol(merged_r)
+# prob_merged$xmin  <- raster::xmin(merged_r)
+# prob_merged$ymin  <- raster::ymin(merged_r)
+# prob_merged$xmax  <- raster::xmax(merged_r)
+# prob_merged$ymax  <- raster::ymax(merged_r)
+#
+# # prob_bayes <- sits::sits_smooth(type = "bayes",
+# #                                 cube = prob_merged)
+#
+# class_cube <- sits::sits_label_classification(cube = prob_merged,
+#                                               output_dir = merge_out_dir)
+#
+# sprintf(paste0("split_dir     : %s \n",
+#                "split_out_dir : %s \n",
+#                "my_bands      : %s \n",
+#                "cube_name     : %s \n",
+#                "satellite     : %s \n",
+#                "sensor        : %s \n",
+#                "model_file    : %s \n",
+#                "labels        : %s"),
+#         split_dir,
+#         split_out_dir,
+#         paste(my_bands, collapse = ", "),
+#         cube_name,
+#         satellite,
+#         sensor,
+#         model_file,
+#         paste(sort(unique(environment(ml_model)$data$label)),
+#               collapse = ", ")) %>%
+#     cat(file = paste0(merge_out_dir, "/metadata.txt"))

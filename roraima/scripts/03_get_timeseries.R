@@ -1,4 +1,5 @@
 # Get time series for the sample points.
+
 library(dplyr)
 library(readr)
 library(sits)
@@ -7,12 +8,12 @@ library(tidyr)
 
 #---- Set up ----
 
-#samples_file <- "/home/alber.ipia/Documents/bdc_amazonia/roraima/data/samples/samples.shp"
-samples_dir <- "/home/alber.ipia/Documents/bdc_amazonia/roraima/data/samples"
-
 source("/home/alber.ipia/Documents/bdc_amazonia/roraima/scripts/00_util.R")
 
+samples_dir <- "/home/alber.ipia/Documents/bdc_amazonia/roraima/data/samples"
+
 stopifnot(dir.exists(samples_dir))
+
 
 
 #---- Script -----
@@ -55,7 +56,8 @@ label_tb <- samples_tb %>%
         sep = "_")) %>%
     dplyr::select(id_coords, label)
 
-samples_tmp <- tempfile(pattern = "samples_", fileext = ".csv")
+samples_tmp <- tempfile(pattern = "samples_",
+                        fileext = ".csv")
 samples_tb %>%
    readr::write_csv(samples_tmp)
 stopifnot(file.exists(samples_tmp))

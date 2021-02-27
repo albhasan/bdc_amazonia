@@ -17,7 +17,13 @@ stopifnot(access_key != "")
 
 #---- Script ----
 
-image_tb <- "/home/alber.ipia/Documents/bdc_amazonia/roraima/scripts/S2_10_16D_STK-1_079082.txt" %>%
+images_file <- "/home/alber.ipia/Documents/bdc_amazonia/roraima/scripts/S2_10_16D_STK-1_079082.txt"
+out_dir <- "/home/alber.ipia/Documents/bdc_amazonia/roraima/data/raster/S2_10_16D_STK/v001/"
+
+stopifnot(file.exists(images_file))
+stopifnot(dir.exists(out_dir))
+
+image_tb <-  images_file %>%
     readr::read_delim(delim = " ",
                       col_names = FALSE,
                       col_types = "c") %>%
@@ -31,14 +37,17 @@ image_tb <- "/home/alber.ipia/Documents/bdc_amazonia/roraima/scripts/S2_10_16D_S
     dplyr::filter(band %in% c("band1", "band11", "band12", "band2", "band3",
                               "band4", "band5", "band6", "band7", "band8",
                               "band8a", "EVI", "Fmask4", "NDVI")) %>%
-    dplyr::mutate(url = stringr::str_c(img_url, "?access_token=",
-                                           access_key),
-                  destfile = stringr::str_c(
-"/home/alber.ipia/Documents/bdc_amazonia/roraima/data/raster/S2_10_16D_STK/v001/",
-                                               tile, "/", basename(img_url)))
+    dplyr::mutate(url = stringr::str_c(img_url,
+                                       "?access_token=",
+                                       access_key),
+                  destfile = stringr::str_c(out_dir,
+                                            tile,
+                                            "/",
+                                            basename(img_url)))
 image_tb <- image_tb %>%
     dplyr::mutate(downloaded = purrr::map2_int(url, destfile, download.file,
-                                         method = "auto", quiet = TRUE))
+                                               method = "auto",
+                                               quiet = TRUE))
 
 image_tb %>%
         tidyr::nest(bands = c(band, img_url, url, destfile, dowloaded)) %>%
