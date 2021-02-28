@@ -2,3 +2,10 @@
 .Rhistory
 .RData
 .Ruserdata
+*.tif
+*.log
+*.tar.gz
+*.shp
+*.prj
+*.shx
+*.dbf
